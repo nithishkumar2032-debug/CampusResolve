@@ -1,6 +1,4 @@
-import { notFound } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
-import { StatusBadge, UrgencyBadge } from "@/components/status-badge";
+import { EscalatedBadge, StatusBadge, UrgencyBadge } from "@/components/status-badge";
 import { TicketTimeline } from "@/components/ticket-timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +6,8 @@ import { assignAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
 import { URGENCIES } from "@/lib/constants";
 import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/demo-store";
+import { AppShell } from "@/components/app-shell";
+import { notFound } from "next/navigation";
 
 export default async function AdminTicketPage({
   params,
@@ -39,6 +39,7 @@ export default async function AdminTicketPage({
               <div className="flex gap-2">
                 <StatusBadge status={complaint.status} />
                 <UrgencyBadge urgency={complaint.urgency} />
+                {complaint.is_escalated ? <EscalatedBadge /> : null}
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -85,7 +86,7 @@ export default async function AdminTicketPage({
                       </option>
                     ))}
                   </select>
-                  <Button type="submit" className="bg-teal-700 hover:bg-teal-600">
+                  <Button type="submit" className="rounded bg-navy hover:bg-navy-deep">
                     Reassign & refresh deadlines
                   </Button>
                 </form>

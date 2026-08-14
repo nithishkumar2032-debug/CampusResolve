@@ -1,13 +1,14 @@
-import { notFound } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
-import { StatusBadge, UrgencyBadge } from "@/components/status-badge";
-import { TicketTimeline } from "@/components/ticket-timeline";
+import { WorkflowStepper } from "@/components/workflow-stepper";
+import { EscalatedBadge, StatusBadge, UrgencyBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { assignAction, reviewAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
 import { CATEGORIES, URGENCIES } from "@/lib/constants";
 import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/demo-store";
+import { TicketTimeline } from "@/components/ticket-timeline";
+import { AppShell } from "@/components/app-shell";
+import { notFound } from "next/navigation";
 
 export default async function WardenTicketPage({
   params,
@@ -29,6 +30,10 @@ export default async function WardenTicketPage({
       title={complaint.ticket_id}
       nav={[{ href: "/warden", label: "Queue" }]}
     >
+      <div className="mb-6 cr-card p-4">
+        <p className="cr-label mb-3">Workflow</p>
+        <WorkflowStepper status={complaint.status} />
+      </div>
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-4">
           <Card>
@@ -37,6 +42,7 @@ export default async function WardenTicketPage({
               <div className="flex gap-2">
                 <StatusBadge status={complaint.status} />
                 <UrgencyBadge urgency={complaint.urgency} />
+                {complaint.is_escalated ? <EscalatedBadge /> : null}
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -110,7 +116,7 @@ export default async function WardenTicketPage({
                       ))}
                     </select>
                   </div>
-                  <Button type="submit" className="bg-teal-700 hover:bg-teal-600">
+                  <Button type="submit" className="rounded bg-navy hover:bg-navy-deep">
                     Assign worker & set deadlines
                   </Button>
                 </form>

@@ -56,7 +56,7 @@ export default async function WorkerTicketPage({
                     await acceptAction(complaint.id);
                   }}
                 >
-                  <Button type="submit" className="bg-teal-700 hover:bg-teal-600">
+                  <Button type="submit" className="rounded bg-navy hover:bg-navy-deep">
                     Accept & start work
                   </Button>
                 </form>
@@ -82,7 +82,7 @@ export default async function WorkerTicketPage({
                     name="completion_path"
                     placeholder="Completion evidence URL/path (optional)"
                   />
-                  <Button type="submit" className="bg-teal-700 hover:bg-teal-600">
+                  <Button type="submit" className="rounded bg-navy hover:bg-navy-deep">
                     Submit resolution
                   </Button>
                 </form>
