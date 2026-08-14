@@ -27,6 +27,8 @@ Password for all: `demo1234`
 | Worker | worker@demo.edu |
 | Admin | admin@demo.edu |
 
+Full MVP handoff (workflows, env, limitations, demo script): [`docs/MVP_HANDOFF.md`](./MVP_HANDOFF.md)
+
 ## Local demo
 
 ```bash
@@ -36,20 +38,23 @@ npm run dev
 
 URL: http://localhost:3000
 
+Force reseed after seed changes: delete `.data/store.json` then restart.
+
 ## Downloadable source ZIP
 
 `C:\Users\nithi\Downloads\CampusResolve-App.zip`
 
 ## Screenshots to capture
 
-- Login with demo chips
+- Login with Demo Mode label
 - Student new complaint + ticket detail timeline
-- Warden assign screen
+- Warden assign screen with deadline preview
 - Worker resolve screen
-- Admin escalations
+- Admin escalations + invite staff
 - Help Assistant chat open
 
 ## Notes
 
-- Demo mode (no Supabase env required) — data may reset on cold serverless instances
+- Demo mode (no Supabase env required) — Vercel `/tmp` store may reset on cold starts
 - Optional later: `OPENAI_API_KEY`, Supabase keys for cloud AI / persistent DB
+- Branch with MVP upgrades: `mvp-upgrade` (merge/redeploy for latest)

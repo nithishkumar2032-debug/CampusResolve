@@ -1,6 +1,10 @@
 import type { ComplaintCategory, ComplaintStatus, Urgency, UserRole } from "./types";
 
 export const APP_NAME = "CampusResolve";
+export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+export const SEED_VERSION = 3;
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
 export const CATEGORIES: { value: ComplaintCategory; label: string }[] = [
   { value: "electrical", label: "Electrical" },
@@ -38,12 +42,20 @@ export const ROLE_HOME: Record<UserRole, string> = {
   admin: "/admin",
 };
 
-/** Hours until response / resolution deadline by urgency */
+/** Centralized SLA matrix (minutes) — configurable demo defaults */
+export const SLA_MINUTES: Record<Urgency, { response: number; resolution: number }> = {
+  emergency: { response: 15, resolution: 120 },
+  high: { response: 60, resolution: 480 },
+  medium: { response: 240, resolution: 1440 },
+  low: { response: 480, resolution: 4320 },
+};
+
+/** @deprecated use SLA_MINUTES — kept for any leftover imports */
 export const DEADLINE_HOURS: Record<Urgency, { response: number; resolution: number }> = {
-  emergency: { response: 2, resolution: 12 },
-  high: { response: 8, resolution: 48 },
-  medium: { response: 24, resolution: 72 },
-  low: { response: 48, resolution: 120 },
+  emergency: { response: 0.25, resolution: 2 },
+  high: { response: 1, resolution: 8 },
+  medium: { response: 4, resolution: 24 },
+  low: { response: 8, resolution: 72 },
 };
 
 export const FAQ_FALLBACK: { q: string; a: string; roles?: UserRole[] }[] = [

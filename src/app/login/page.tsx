@@ -15,7 +15,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { loginAction } from "@/lib/actions";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, DEMO_MODE } from "@/lib/constants";
 import type { UserRole } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,15 +68,17 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<UserRole>("student");
-  const [email, setEmail] = useState("student@demo.edu");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState(DEMO_MODE ? "student@demo.edu" : "");
+  const [password, setPassword] = useState(DEMO_MODE ? "demo1234" : "");
 
   const activeRole = roles.find((r) => r.id === selected) ?? roles[0];
 
   function pickRole(role: (typeof roles)[number]) {
     setSelected(role.id);
-    setEmail(role.email);
-    setPassword("demo1234");
+    if (DEMO_MODE) {
+      setEmail(role.email);
+      setPassword("demo1234");
+    }
   }
 
   return (
@@ -133,8 +135,17 @@ export default function LoginPage() {
               action={(fd) => {
                 setError(null);
                 startTransition(async () => {
-                  const res = await loginAction(fd);
-                  if (res?.error) setError(res.error);
+                  const timeout = window.setTimeout(() => {
+                    setError("Sign-in is taking too long. Check your connection and try again.");
+                  }, 15000);
+                  try {
+                    const res = await loginAction(fd);
+                    if (res?.error) setError(res.error);
+                  } catch {
+                    // redirect() throws; ignore unless still pending with error
+                  } finally {
+                    window.clearTimeout(timeout);
+                  }
                 });
               }}
             >
@@ -190,6 +201,7 @@ export default function LoginPage() {
                       id="email"
                       name="email"
                       type="email"
+                      autoComplete="username"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={activeRole.placeholder}
@@ -210,6 +222,7 @@ export default function LoginPage() {
                       id="password"
                       name="password"
                       type="password"
+                      autoComplete="current-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
@@ -237,9 +250,18 @@ export default function LoginPage() {
                   Create an account
                 </Link>
               </p>
-              <p className="text-center text-xs text-on-surface-variant">
-                Demo password for all roles: <span className="font-medium">demo1234</span>
-              </p>
+              {DEMO_MODE ? (
+                <div
+                  className="rounded-lg border border-royal/30 bg-muted px-3 py-2 text-center text-xs text-on-surface-variant"
+                  role="note"
+                >
+                  <p className="font-semibold text-navy">Demo Mode</p>
+                  <p>
+                    Role cards fill demo emails. Password for all demo accounts:{" "}
+                    <span className="font-medium text-navy">demo1234</span>
+                  </p>
+                </div>
+              ) : null}
             </form>
           </div>
         </div>

@@ -1,10 +1,11 @@
+import { AssignWorkerForm } from "@/components/assign-worker-form";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { EscalatedBadge, StatusBadge, UrgencyBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { assignAction, reviewAction } from "@/lib/actions";
+import { reviewAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
-import { CATEGORIES, URGENCIES } from "@/lib/constants";
+import { CATEGORIES } from "@/lib/constants";
 import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/demo-store";
 import { TicketTimeline } from "@/components/ticket-timeline";
 import { AppShell } from "@/components/app-shell";
@@ -80,46 +81,18 @@ export default async function WardenTicketPage({
                       await reviewAction(complaint.id);
                     }}
                   >
-                    <Button type="submit" variant="outline">
+                    <Button type="submit" variant="outline" className="rounded-lg">
                       Mark under review
                     </Button>
                   </form>
                 ) : null}
-                <form action={assignAction} className="space-y-3">
-                  <input type="hidden" name="complaint_id" value={complaint.id} />
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Worker</label>
-                    <select
-                      name="worker_id"
-                      required
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                      defaultValue={workers[0]?.id}
-                    >
-                      {workers.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Confirm urgency</label>
-                    <select
-                      name="urgency"
-                      defaultValue={complaint.urgency}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                    >
-                      {URGENCIES.map((u) => (
-                        <option key={u.value} value={u.value}>
-                          {u.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button type="submit" className="rounded bg-navy hover:bg-navy-deep">
-                    Assign worker & set deadlines
-                  </Button>
-                </form>
+                {(complaint.status === "under_review" || user.role === "admin") && (
+                  <AssignWorkerForm
+                    complaintId={complaint.id}
+                    workers={workers}
+                    defaultUrgency={complaint.urgency}
+                  />
+                )}
               </CardContent>
             </Card>
           ) : null}

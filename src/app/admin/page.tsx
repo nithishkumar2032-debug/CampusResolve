@@ -4,8 +4,13 @@ import { AppShell } from "@/components/app-shell";
 import { EscalationBanner } from "@/components/escalation-banner";
 import { EscalatedBadge, StatusBadge, UrgencyBadge } from "@/components/status-badge";
 import { KpiCard } from "@/components/kpi-card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { createStaffAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
 import { getStats, listComplaintsForUser } from "@/lib/demo-store";
+import { CATEGORIES } from "@/lib/constants";
 
 export default async function AdminDashboard() {
   const user = await requireUser(["admin"]);
@@ -20,11 +25,62 @@ export default async function AdminDashboard() {
     >
       <EscalationBanner count={stats.escalated} href="/admin" />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard label="Total tickets" value={stats.total} />
         <KpiCard label="Open" value={stats.open} tone="info" />
         <KpiCard label="Escalated" value={stats.escalated} tone="danger" />
+        <KpiCard label="Overdue" value={stats.overdue} tone="danger" />
         <KpiCard label="Resolved/closed" value={stats.resolved} tone="success" />
+      </div>
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <div className="cr-card p-4">
+          <h2 className="mb-3 text-sm font-semibold text-navy">By category</h2>
+          <ul className="space-y-2">
+            {Object.entries(stats.byCategory).map(([key, count]) => (
+              <li key={key} className="flex items-center justify-between text-sm">
+                <span>{CATEGORIES.find((c) => c.value === key)?.label ?? key}</span>
+                <span className="font-semibold text-navy">{count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="cr-card p-4">
+          <h2 className="mb-3 text-sm font-semibold text-navy">Invite staff account</h2>
+          <form action={createStaffAction} className="space-y-3">
+            <div>
+              <Label htmlFor="full_name">Full name</Label>
+              <Input id="full_name" name="full_name" required className="rounded-lg" />
+            </div>
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" type="email" required className="rounded-lg" />
+            </div>
+            <div>
+              <Label htmlFor="password">Temporary password</Label>
+              <Input id="password" name="password" type="password" required minLength={6} className="rounded-lg" />
+            </div>
+            <div>
+              <Label htmlFor="role">Role</Label>
+              <select
+                id="role"
+                name="role"
+                className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                defaultValue="worker"
+              >
+                <option value="warden">Warden</option>
+                <option value="worker">Worker</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="hostel_block">Hostel block (optional)</Label>
+              <Input id="hostel_block" name="hostel_block" className="rounded-lg" />
+            </div>
+            <Button type="submit" className="rounded-lg bg-navy hover:bg-navy-deep">
+              Create account
+            </Button>
+          </form>
+        </div>
       </div>
 
       <div className="cr-card overflow-hidden">

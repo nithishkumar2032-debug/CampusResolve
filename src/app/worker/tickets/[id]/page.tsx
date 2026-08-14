@@ -70,19 +70,27 @@ export default async function WorkerTicketPage({
                 <CardTitle className="text-base">Mark resolved</CardTitle>
               </CardHeader>
               <CardContent>
-                <form action={resolveAction} className="space-y-3">
+                <form action={resolveAction} encType="multipart/form-data" className="space-y-3">
                   <input type="hidden" name="complaint_id" value={complaint.id} />
                   <Textarea
                     name="notes"
                     required
                     placeholder="Describe the action taken"
-                    className="min-h-24"
+                    className="min-h-24 rounded-lg"
                   />
-                  <Input
-                    name="completion_path"
-                    placeholder="Completion evidence URL/path (optional)"
-                  />
-                  <Button type="submit" className="rounded bg-navy hover:bg-navy-deep">
+                  <div>
+                    <label htmlFor="completion_file" className="mb-1 block text-sm font-medium">
+                      Completion evidence (optional)
+                    </label>
+                    <Input
+                      id="completion_file"
+                      name="completion_file"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="rounded-lg"
+                    />
+                  </div>
+                  <Button type="submit" className="rounded-lg bg-navy hover:bg-navy-deep">
                     Submit resolution
                   </Button>
                 </form>
