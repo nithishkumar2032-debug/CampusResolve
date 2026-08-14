@@ -1,6 +1,50 @@
 # Submission package
 
-## Live demo (local)
+## GitHub (done)
+
+Repository: https://github.com/nithishkumar2032-debug/CampusResolve
+
+## Live URL
+
+_Pending Vercel deploy — follow the Import steps below, then paste the URL here / reply with it._
+
+## Deploy on Vercel (Import from GitHub) — do this now
+
+You are already on the Vercel Hobby dashboard. Finish deploy like this:
+
+1. Click **Import** / **Import Project** / **Add New… → Project**
+2. Find **CampusResolve** under your GitHub account `nithishkumar2032-debug`
+   - If the repo list is empty: click **Adjust GitHub App Permissions** / **Configure** and grant access to **CampusResolve** (or all repos), then refresh
+3. Select **CampusResolve** → **Import**
+4. Framework Preset: **Next.js** (leave default)
+5. Root Directory: `.` (leave default)
+6. Environment Variables: leave empty for demo mode
+7. Click **Deploy**
+8. Wait ~1–2 minutes until status is **Ready**
+9. Open the `.vercel.app` URL and copy it
+
+### Optional CLI (if you prefer)
+
+Complete device login if a terminal shows a `vercel.com/oauth/device?user_code=...` link, then we can run `npx vercel --prod --yes`.
+
+## Install as app on phone (PWA)
+
+1. Open the live Vercel URL in Chrome (Android) or Safari (iPhone)
+2. Menu → **Add to Home Screen** / **Install app**
+3. Launch CampusResolve from the home-screen icon
+
+## Demo accounts
+
+Password for all: `demo1234`
+
+| Role | Email |
+|------|--------|
+| Student | student@demo.edu |
+| Warden | warden@demo.edu |
+| Worker | worker@demo.edu |
+| Admin | admin@demo.edu |
+
+## Local demo
 
 ```bash
 npm install
@@ -9,26 +53,9 @@ npm run dev
 
 URL: http://localhost:3000
 
-## Demo accounts
+## Downloadable source ZIP
 
-| Role | Email | Password |
-|------|--------|----------|
-| Student | student@demo.edu | demo1234 |
-| Warden | warden@demo.edu | demo1234 |
-| Worker | worker@demo.edu | demo1234 |
-| Admin | admin@demo.edu | demo1234 |
-
-## Deploy to Vercel + GitHub
-
-1. Create a GitHub repository and push this project:
-   ```bash
-   git remote add origin https://github.com/<you>/CampusResolve.git
-   git branch -M main
-   git push -u origin main
-   ```
-2. In [vercel.com](https://vercel.com): Import the GitHub repo → Framework Next.js → Deploy
-3. Optional env vars: `OPENAI_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-4. For production database: run `supabase/migrations/001_initial.sql` in Supabase SQL editor
+`C:\Users\nithi\Downloads\CampusResolve-App.zip`
 
 ## Screenshots to capture
 
