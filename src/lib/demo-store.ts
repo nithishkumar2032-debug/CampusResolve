@@ -14,8 +14,14 @@ import type {
   UserRole,
 } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), ".data");
+const DATA_DIR =
+  process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? path.join("/tmp", "campusresolve-data")
+    : path.join(process.cwd(), ".data");
 const STORE_PATH = path.join(DATA_DIR, "store.json");
+
+/** In-memory cache so warm serverless instances keep demo data briefly */
+let memoryCache: AppStore | null = null;
 
 function uid(prefix = "id"): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -113,20 +119,34 @@ function seedStore(): AppStore {
 }
 
 async function ensureStore(): Promise<AppStore> {
+  if (memoryCache) {
+    return memoryCache;
+  }
   await fs.mkdir(DATA_DIR, { recursive: true });
   try {
     const raw = await fs.readFile(STORE_PATH, "utf8");
-    return JSON.parse(raw) as AppStore;
+    memoryCache = JSON.parse(raw) as AppStore;
+    return memoryCache;
   } catch {
     const seeded = seedStore();
-    await fs.writeFile(STORE_PATH, JSON.stringify(seeded, null, 2), "utf8");
+    memoryCache = seeded;
+    try {
+      await fs.writeFile(STORE_PATH, JSON.stringify(seeded, null, 2), "utf8");
+    } catch {
+      /* /tmp may be unavailable in some runtimes; memory still works */
+    }
     return seeded;
   }
 }
 
 async function saveStore(store: AppStore): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+  memoryCache = store;
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+  } catch {
+    /* keep memory cache even if disk write fails on serverless */
+  }
 }
 
 function applyEscalationFlags(store: AppStore): AppStore {
