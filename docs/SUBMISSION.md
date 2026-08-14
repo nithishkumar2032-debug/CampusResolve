@@ -1,35 +1,18 @@
 # Submission package
 
-## GitHub (done)
+## Live URL (production)
 
-Repository: https://github.com/nithishkumar2032-debug/CampusResolve
+**https://campusresolve-drab.vercel.app**
 
-## Live URL
+Inspect: https://vercel.com/nithishkumar2032-debugs-projects/campusresolve
 
-_Pending Vercel deploy — follow the Import steps below, then paste the URL here / reply with it._
+## GitHub
 
-## Deploy on Vercel (Import from GitHub) — do this now
-
-You are already on the Vercel Hobby dashboard. Finish deploy like this:
-
-1. Click **Import** / **Import Project** / **Add New… → Project**
-2. Find **CampusResolve** under your GitHub account `nithishkumar2032-debug`
-   - If the repo list is empty: click **Adjust GitHub App Permissions** / **Configure** and grant access to **CampusResolve** (or all repos), then refresh
-3. Select **CampusResolve** → **Import**
-4. Framework Preset: **Next.js** (leave default)
-5. Root Directory: `.` (leave default)
-6. Environment Variables: leave empty for demo mode
-7. Click **Deploy**
-8. Wait ~1–2 minutes until status is **Ready**
-9. Open the `.vercel.app` URL and copy it
-
-### Optional CLI (if you prefer)
-
-Complete device login if a terminal shows a `vercel.com/oauth/device?user_code=...` link, then we can run `npx vercel --prod --yes`.
+https://github.com/nithishkumar2032-debug/CampusResolve
 
 ## Install as app on phone (PWA)
 
-1. Open the live Vercel URL in Chrome (Android) or Safari (iPhone)
+1. Open https://campusresolve-drab.vercel.app in Chrome (Android) or Safari (iPhone)
 2. Menu → **Add to Home Screen** / **Install app**
 3. Launch CampusResolve from the home-screen icon
 
@@ -65,3 +48,8 @@ URL: http://localhost:3000
 - Worker resolve screen
 - Admin escalations
 - Help Assistant chat open
+
+## Notes
+
+- Demo mode (no Supabase env required) — data may reset on cold serverless instances
+- Optional later: `OPENAI_API_KEY`, Supabase keys for cloud AI / persistent DB

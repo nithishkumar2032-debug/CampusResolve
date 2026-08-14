@@ -2,6 +2,9 @@
 
 College hostel complaint, maintenance request, and escalation management MVP.
 
+**Live app:** https://campusresolve-drab.vercel.app  
+**GitHub:** https://github.com/nithishkumar2032-debug/CampusResolve
+
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind
