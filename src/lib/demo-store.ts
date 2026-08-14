@@ -1,7 +1,14 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { deadlinesFromUrgency, isOverdue, priorityFromUrgency } from "./complaints/deadlines";
+import { SEED_VERSION } from "./constants";
+import {
+  deadlinesFromUrgency,
+  isOverdue,
+  priorityFromUrgency,
+} from "./complaints/deadlines";
+import { assertTransition, sanitizeText } from "./complaints/transitions";
 import { formatTicketId } from "./complaints/ticket-id";
+import { buildSeedStore } from "./seed";
 import type {
   AppStore,
   Attachment,
@@ -9,6 +16,7 @@ import type {
   ComplaintCategory,
   ComplaintEvent,
   ComplaintStatus,
+  EscalationRecord,
   Profile,
   Urgency,
   UserRole,
@@ -19,121 +27,38 @@ const DATA_DIR =
     ? path.join("/tmp", "campusresolve-data")
     : path.join(process.cwd(), ".data");
 const STORE_PATH = path.join(DATA_DIR, "store.json");
+const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
-/** In-memory cache so warm serverless instances keep demo data briefly */
 let memoryCache: AppStore | null = null;
 
 function uid(prefix = "id"): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
 }
 
-function seedStore(): AppStore {
-  const now = new Date().toISOString();
-  const profiles: Profile[] = [
-    {
-      id: "user_student",
-      email: "student@demo.edu",
-      full_name: "Asha Student",
-      role: "student",
-      hostel_block: "Block B",
-      password: "demo1234",
-      created_at: now,
-    },
-    {
-      id: "user_warden",
-      email: "warden@demo.edu",
-      full_name: "Ravi Warden",
-      role: "warden",
-      hostel_block: "Block B",
-      password: "demo1234",
-      created_at: now,
-    },
-    {
-      id: "user_worker",
-      email: "worker@demo.edu",
-      full_name: "Kumar Technician",
-      role: "worker",
-      hostel_block: null,
-      password: "demo1234",
-      created_at: now,
-    },
-    {
-      id: "user_worker2",
-      email: "worker2@demo.edu",
-      full_name: "Priya Electrician",
-      role: "worker",
-      hostel_block: null,
-      password: "demo1234",
-      created_at: now,
-    },
-    {
-      id: "user_admin",
-      email: "admin@demo.edu",
-      full_name: "Dean Admin",
-      role: "admin",
-      hostel_block: null,
-      password: "demo1234",
-      created_at: now,
-    },
-  ];
-
-  const sample: Complaint = {
-    id: "cmp_sample",
-    ticket_id: "CR-2026-0001",
-    student_id: "user_student",
-    category: "plumbing",
-    hostel_location: "Block B, Room 204",
-    description: "Bathroom tap leaking continuously since yesterday evening.",
-    urgency: "medium",
-    status: "submitted",
-    priority: 3,
-    assigned_worker_id: null,
-    response_deadline: null,
-    resolution_deadline: null,
-    is_escalated: false,
-    escalation_reason: null,
-    resolution_notes: null,
-    created_at: now,
-    updated_at: now,
-  };
-
-  const events: ComplaintEvent[] = [
-    {
-      id: "evt_sample",
-      complaint_id: sample.id,
-      actor_id: "user_student",
-      from_status: null,
-      to_status: "submitted",
-      note: "Complaint registered",
-      created_at: now,
-    },
-  ];
-
-  return {
-    profiles,
-    complaints: [sample],
-    events,
-    attachments: [],
-    ticket_counter: 1,
-  };
-}
-
 async function ensureStore(): Promise<AppStore> {
-  if (memoryCache) {
+  if (memoryCache && memoryCache.seed_version === SEED_VERSION) {
     return memoryCache;
   }
   await fs.mkdir(DATA_DIR, { recursive: true });
   try {
     const raw = await fs.readFile(STORE_PATH, "utf8");
-    memoryCache = JSON.parse(raw) as AppStore;
-    return memoryCache;
+    const parsed = JSON.parse(raw) as AppStore;
+    if (parsed.seed_version !== SEED_VERSION) {
+      const seeded = buildSeedStore();
+      memoryCache = seeded;
+      await saveStore(seeded);
+      return seeded;
+    }
+    parsed.escalations = parsed.escalations ?? [];
+    memoryCache = parsed;
+    return parsed;
   } catch {
-    const seeded = seedStore();
+    const seeded = buildSeedStore();
     memoryCache = seeded;
     try {
       await fs.writeFile(STORE_PATH, JSON.stringify(seeded, null, 2), "utf8");
     } catch {
-      /* /tmp may be unavailable in some runtimes; memory still works */
+      /* memory only */
     }
     return seeded;
   }
@@ -145,46 +70,69 @@ async function saveStore(store: AppStore): Promise<void> {
     await fs.mkdir(DATA_DIR, { recursive: true });
     await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
   } catch {
-    /* keep memory cache even if disk write fails on serverless */
+    /* keep memory */
   }
+}
+
+function recordEscalation(
+  store: AppStore,
+  complaint: Complaint,
+  reason: string,
+  deadline_exceeded: string | null = null,
+) {
+  const esc: EscalationRecord = {
+    id: uid("esc"),
+    complaint_id: complaint.id,
+    reason,
+    recipient_role: "admin",
+    timestamp: new Date().toISOString(),
+    status_at_escalation: complaint.status,
+    deadline_exceeded,
+    reviewed: false,
+  };
+  store.escalations.push(esc);
+  complaint.is_escalated = true;
+  complaint.escalation_reason = reason;
 }
 
 function applyEscalationFlags(store: AppStore): AppStore {
   const now = new Date();
-  let changed = false;
   for (const c of store.complaints) {
     if (c.status === "closed" || c.status === "resolved") continue;
+
     const missedResponse =
       ["submitted", "under_review"].includes(c.status) &&
       isOverdue(c.response_deadline, now);
     const missedResolution =
       ["assigned", "in_progress"].includes(c.status) &&
       isOverdue(c.resolution_deadline, now);
+
     if ((missedResponse || missedResolution) && !c.is_escalated) {
-      c.is_escalated = true;
-      c.escalation_reason = missedResponse
+      const reason = missedResponse
         ? "Response deadline exceeded without assignment"
         : "Resolution deadline exceeded without completion";
+      recordEscalation(
+        store,
+        c,
+        reason,
+        missedResponse ? c.response_deadline : c.resolution_deadline,
+      );
       c.updated_at = now.toISOString();
       store.events.push({
         id: uid("evt"),
         complaint_id: c.id,
         actor_id: "system",
+        actor_role: "system",
         from_status: c.status,
         to_status: c.status,
-        note: `Escalated: ${c.escalation_reason}`,
+        note: `Escalated: ${reason}`,
         created_at: now.toISOString(),
       });
-      changed = true;
     }
+
     if (c.urgency === "emergency" && !c.is_escalated) {
-      c.is_escalated = true;
-      c.escalation_reason = c.escalation_reason ?? "Emergency / safety priority flag";
-      changed = true;
+      recordEscalation(store, c, "Emergency / safety priority flag");
     }
-  }
-  if (changed) {
-    // persisted by caller after mutation paths; here we mutate in-memory
   }
   return store;
 }
@@ -224,9 +172,9 @@ export async function createProfile(input: {
   const profile: Profile = {
     id: uid("user"),
     email: input.email.toLowerCase(),
-    full_name: input.full_name,
+    full_name: sanitizeText(input.full_name, 120),
     role: input.role,
-    hostel_block: input.hostel_block ?? null,
+    hostel_block: input.hostel_block ? sanitizeText(input.hostel_block, 80) : null,
     password: input.password,
     created_at: new Date().toISOString(),
   };
@@ -245,7 +193,6 @@ export async function listComplaintsForUser(profile: Profile): Promise<Complaint
   } else if (profile.role === "admin") {
     list = list.filter((c) => c.is_escalated || c.urgency === "emergency");
   }
-  // warden (and any other staff) sees full queue
   return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
@@ -271,6 +218,14 @@ export async function getAttachments(complaintId: string): Promise<Attachment[]>
   return store.attachments.filter((a) => a.complaint_id === complaintId);
 }
 
+export async function getEscalations(complaintId?: string): Promise<EscalationRecord[]> {
+  const store = await getStore();
+  const list = complaintId
+    ? store.escalations.filter((e) => e.complaint_id === complaintId)
+    : store.escalations;
+  return [...list].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
+
 export async function createComplaint(input: {
   student_id: string;
   category: ComplaintCategory;
@@ -278,29 +233,28 @@ export async function createComplaint(input: {
   description: string;
   urgency: Urgency;
   evidence_path?: string;
+  evidence_mime?: string;
 }): Promise<Complaint> {
   const store = await getStore();
   const year = new Date().getFullYear();
   store.ticket_counter += 1;
   const now = new Date().toISOString();
+  const emergency = input.urgency === "emergency" || input.category === "safety";
   const complaint: Complaint = {
     id: uid("cmp"),
     ticket_id: formatTicketId(year, store.ticket_counter),
     student_id: input.student_id,
     category: input.category,
-    hostel_location: input.hostel_location,
-    description: input.description,
+    hostel_location: sanitizeText(input.hostel_location, 200),
+    description: sanitizeText(input.description, 4000),
     urgency: input.urgency,
     status: "submitted",
     priority: priorityFromUrgency(input.urgency),
     assigned_worker_id: null,
     response_deadline: null,
     resolution_deadline: null,
-    is_escalated: input.urgency === "emergency" || input.category === "safety",
-    escalation_reason:
-      input.urgency === "emergency" || input.category === "safety"
-        ? "Emergency / safety priority flag"
-        : null,
+    is_escalated: emergency,
+    escalation_reason: emergency ? "Emergency / safety priority flag" : null,
     resolution_notes: null,
     created_at: now,
     updated_at: now,
@@ -310,11 +264,15 @@ export async function createComplaint(input: {
     id: uid("evt"),
     complaint_id: complaint.id,
     actor_id: input.student_id,
+    actor_role: "student",
     from_status: null,
     to_status: "submitted",
     note: "Complaint registered",
     created_at: now,
   });
+  if (emergency) {
+    recordEscalation(store, complaint, "Emergency / safety priority flag");
+  }
   if (input.evidence_path) {
     store.attachments.push({
       id: uid("att"),
@@ -322,6 +280,7 @@ export async function createComplaint(input: {
       uploaded_by: input.student_id,
       kind: "evidence",
       storage_path: input.evidence_path,
+      mime_type: input.evidence_mime,
       created_at: now,
     });
   }
@@ -332,6 +291,7 @@ export async function createComplaint(input: {
 async function transition(
   complaintId: string,
   actorId: string,
+  actorRole: UserRole | "system",
   toStatus: ComplaintStatus,
   note: string,
   patch: Partial<Complaint> = {},
@@ -339,6 +299,9 @@ async function transition(
   const store = await getStore();
   const complaint = store.complaints.find((c) => c.id === complaintId);
   if (!complaint) throw new Error("Complaint not found");
+  if (actorRole !== "system") {
+    assertTransition(complaint.status, toStatus, actorRole);
+  }
   const from = complaint.status;
   const now = new Date().toISOString();
   Object.assign(complaint, patch, { status: toStatus, updated_at: now });
@@ -346,9 +309,10 @@ async function transition(
     id: uid("evt"),
     complaint_id: complaint.id,
     actor_id: actorId,
+    actor_role: actorRole,
     from_status: from,
     to_status: toStatus,
-    note,
+    note: sanitizeText(note, 1000),
     created_at: now,
   });
   await saveStore(store);
@@ -356,12 +320,19 @@ async function transition(
 }
 
 export async function reviewComplaint(complaintId: string, actorId: string, note?: string) {
-  return transition(complaintId, actorId, "under_review", note ?? "Reviewed by warden");
+  return transition(
+    complaintId,
+    actorId,
+    "warden",
+    "under_review",
+    note ?? "Reviewed by warden",
+  );
 }
 
 export async function assignComplaint(
   complaintId: string,
   actorId: string,
+  actorRole: UserRole,
   workerId: string,
   urgency?: Urgency,
 ) {
@@ -370,17 +341,31 @@ export async function assignComplaint(
   if (!complaint) throw new Error("Complaint not found");
   const u = urgency ?? complaint.urgency;
   const deadlines = deadlinesFromUrgency(u);
-  return transition(complaintId, actorId, "assigned", `Assigned to worker`, {
-    assigned_worker_id: workerId,
-    urgency: u,
-    priority: priorityFromUrgency(u),
-    response_deadline: deadlines.response_deadline,
-    resolution_deadline: deadlines.resolution_deadline,
-  });
+  const worker = store.profiles.find((p) => p.id === workerId);
+  return transition(
+    complaintId,
+    actorId,
+    actorRole,
+    "assigned",
+    `Assigned to ${worker?.full_name ?? "worker"}`,
+    {
+      assigned_worker_id: workerId,
+      urgency: u,
+      priority: priorityFromUrgency(u),
+      response_deadline: deadlines.response_deadline,
+      resolution_deadline: deadlines.resolution_deadline,
+    },
+  );
 }
 
 export async function acceptTask(complaintId: string, workerId: string) {
-  return transition(complaintId, workerId, "in_progress", "Worker accepted and started work");
+  return transition(
+    complaintId,
+    workerId,
+    "worker",
+    "in_progress",
+    "Worker accepted and started work",
+  );
 }
 
 export async function resolveComplaint(
@@ -388,10 +373,18 @@ export async function resolveComplaint(
   workerId: string,
   notes: string,
   completionPath?: string,
+  completionMime?: string,
 ) {
-  const complaint = await transition(complaintId, workerId, "resolved", "Work completed by worker", {
-    resolution_notes: notes,
-  });
+  const clean = sanitizeText(notes, 2000);
+  if (!clean) throw new Error("Resolution notes are required");
+  const complaint = await transition(
+    complaintId,
+    workerId,
+    "worker",
+    "resolved",
+    "Work completed by worker",
+    { resolution_notes: clean },
+  );
   if (completionPath) {
     const store = await getStore();
     store.attachments.push({
@@ -400,9 +393,28 @@ export async function resolveComplaint(
       uploaded_by: workerId,
       kind: "completion",
       storage_path: completionPath,
+      mime_type: completionMime,
       created_at: new Date().toISOString(),
     });
     await saveStore(store);
+  } else {
+    // Flag insufficient completion evidence for staff visibility
+    const store = await getStore();
+    const c = store.complaints.find((x) => x.id === complaintId);
+    if (c && !c.is_escalated) {
+      // soft note only — not auto-escalate unless policy requires
+      store.events.push({
+        id: uid("evt"),
+        complaint_id: complaintId,
+        actor_id: "system",
+        actor_role: "system",
+        from_status: "resolved",
+        to_status: "resolved",
+        note: "Resolved without completion photo — student should verify carefully",
+        created_at: new Date().toISOString(),
+      });
+      await saveStore(store);
+    }
   }
   return complaint;
 }
@@ -417,19 +429,28 @@ export async function verifyComplaint(
     return transition(
       complaintId,
       studentId,
+      "student",
       "closed",
-      comment ?? "Student accepted resolution",
+      comment ? sanitizeText(comment) : "Student accepted resolution",
       { is_escalated: false },
     );
   }
+  const reason = sanitizeText(comment ?? "", 1000);
+  if (!reason) throw new Error("Rejection reason is required");
+  const store = await getStore();
+  const complaint = store.complaints.find((c) => c.id === complaintId);
+  if (!complaint) throw new Error("Complaint not found");
+  recordEscalation(store, complaint, `Student rejected: ${reason}`);
+  await saveStore(store);
   return transition(
     complaintId,
     studentId,
+    "student",
     "under_review",
-    comment ?? "Student rejected resolution — reopened",
+    `Rejected: ${reason}`,
     {
       is_escalated: true,
-      escalation_reason: "Student rejected inadequate resolution",
+      escalation_reason: `Student rejected: ${reason}`,
       assigned_worker_id: null,
       resolution_notes: null,
     },
@@ -440,16 +461,41 @@ export async function addComment(complaintId: string, actorId: string, note: str
   const store = await getStore();
   const complaint = store.complaints.find((c) => c.id === complaintId);
   if (!complaint) throw new Error("Complaint not found");
+  const actor = store.profiles.find((p) => p.id === actorId);
   store.events.push({
     id: uid("evt"),
     complaint_id: complaintId,
     actor_id: actorId,
+    actor_role: actor?.role,
     from_status: complaint.status,
     to_status: complaint.status,
-    note,
+    note: sanitizeText(note, 1000),
     created_at: new Date().toISOString(),
   });
   await saveStore(store);
+}
+
+export async function saveUpload(file: {
+  name: string;
+  type: string;
+  data: Buffer;
+}): Promise<{ path: string; mime: string }> {
+  await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+  const filename = `${Date.now()}_${safe}`;
+  const full = path.join(UPLOAD_DIR, filename);
+  await fs.writeFile(full, file.data);
+  // Serve via API route
+  return { path: `/api/uploads/${filename}`, mime: file.type };
+}
+
+export async function readUpload(filename: string): Promise<Buffer | null> {
+  try {
+    const safe = path.basename(filename);
+    return await fs.readFile(path.join(UPLOAD_DIR, safe));
+  } catch {
+    return null;
+  }
 }
 
 export async function getStats() {
@@ -457,14 +503,30 @@ export async function getStats() {
   const total = store.complaints.length;
   const open = store.complaints.filter((c) => c.status !== "closed").length;
   const escalated = store.complaints.filter((c) => c.is_escalated).length;
+  const overdue = store.complaints.filter(
+    (c) =>
+      c.status !== "closed" &&
+      c.status !== "resolved" &&
+      (isOverdue(c.response_deadline) || isOverdue(c.resolution_deadline)),
+  ).length;
   const resolved = store.complaints.filter(
     (c) => c.status === "resolved" || c.status === "closed",
   ).length;
-  return { total, open, escalated, resolved };
+  const byCategory: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  for (const c of store.complaints) {
+    byCategory[c.category] = (byCategory[c.category] ?? 0) + 1;
+    byStatus[c.status] = (byStatus[c.status] ?? 0) + 1;
+  }
+  return { total, open, escalated, overdue, resolved, byCategory, byStatus };
 }
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
+}
+
+export function isDemoMode(): boolean {
+  return process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
 }

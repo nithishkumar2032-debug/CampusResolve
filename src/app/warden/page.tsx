@@ -1,9 +1,9 @@
-import Link from "next/link";
-import { format } from "date-fns";
 import { AppShell } from "@/components/app-shell";
-import { StatusBadge, UrgencyBadge } from "@/components/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EscalationBanner } from "@/components/escalation-banner";
+import { ComplaintFilters } from "@/components/complaint-filters";
+import { KpiCard } from "@/components/kpi-card";
 import { requireUser } from "@/lib/auth";
+import { isOverdue } from "@/lib/complaints/deadlines";
 import { getStore, listAllComplaints } from "@/lib/demo-store";
 
 export default async function WardenDashboard() {
@@ -11,69 +11,44 @@ export default async function WardenDashboard() {
   const tickets = await listAllComplaints();
   const store = await getStore();
   const open = tickets.filter((t) => t.status !== "closed");
+  const escalated = tickets.filter((t) => t.is_escalated).length;
+  const unassigned = tickets.filter((t) =>
+    ["submitted", "under_review"].includes(t.status),
+  ).length;
+  const overdue = tickets.filter(
+    (t) =>
+      t.status !== "closed" &&
+      t.status !== "resolved" &&
+      (isOverdue(t.response_deadline) || isOverdue(t.resolution_deadline)),
+  ).length;
+  const emergency = tickets.filter(
+    (t) => t.urgency === "emergency" && t.status !== "closed",
+  ).length;
 
   return (
     <AppShell
       user={user}
-      title="Warden queue"
-      nav={[
-        { href: "/warden", label: "Queue" },
-        ...(user.role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
-      ]}
+      title="Complaints Management"
+      subtitle="Review, prioritize, and assign maintenance work."
     >
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-slate-500">Open</p>
-            <p className="text-2xl font-semibold">{open.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-slate-500">Escalated</p>
-            <p className="text-2xl font-semibold text-red-700">
-              {tickets.filter((t) => t.is_escalated).length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-slate-500">Workers</p>
-            <p className="text-2xl font-semibold">
-              {store.profiles.filter((p) => p.role === "worker").length}
-            </p>
-          </CardContent>
-        </Card>
+      <EscalationBanner count={escalated} href={user.role === "admin" ? "/admin" : "/warden"} />
+
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <KpiCard label="Open" value={open.length} tone="info" />
+        <KpiCard label="Unassigned" value={unassigned} />
+        <KpiCard label="Overdue" value={overdue} tone="danger" />
+        <KpiCard label="Escalated" value={escalated} tone="danger" />
+        <KpiCard label="Emergency" value={emergency} tone="danger" />
       </div>
-      <div className="grid gap-3">
-        {tickets.map((t) => (
-          <Link key={t.id} href={`/warden/tickets/${t.id}`}>
-            <Card className="transition hover:ring-2 hover:ring-teal-200">
-              <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-                <div>
-                  <CardTitle className="text-base">{t.ticket_id}</CardTitle>
-                  <p className="text-sm text-slate-600">{t.hostel_location}</p>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <StatusBadge status={t.status} />
-                  <UrgencyBadge urgency={t.urgency} />
-                  {t.is_escalated ? (
-                    <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                      Escalated
-                    </span>
-                  ) : null}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="line-clamp-2 text-sm">{t.description}</p>
-                <p className="mt-2 text-xs text-slate-500">
-                  {format(new Date(t.created_at), "dd MMM yyyy, HH:mm")}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+
+      <div className="mb-4 text-sm text-on-surface-variant">
+        Workers online:{" "}
+        <span className="font-semibold text-navy">
+          {store.profiles.filter((p) => p.role === "worker").length}
+        </span>
       </div>
+
+      <ComplaintFilters tickets={tickets} detailBase="/warden/tickets" />
     </AppShell>
   );
 }

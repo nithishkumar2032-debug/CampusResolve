@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearSession, getSessionUser, requireUser, setSession } from "./auth";
-import { ROLE_HOME } from "./constants";
+import {
+  ALLOWED_IMAGE_TYPES,
+  CATEGORIES,
+  MAX_UPLOAD_BYTES,
+  ROLE_HOME,
+  URGENCIES,
+} from "./constants";
 import {
   acceptTask,
   addComment,
@@ -13,8 +19,10 @@ import {
   findProfileByEmail,
   resolveComplaint,
   reviewComplaint,
+  saveUpload,
   verifyComplaint,
 } from "./demo-store";
+import { sanitizeText } from "./complaints/transitions";
 import type { ComplaintCategory, Urgency, UserRole } from "./types";
 
 export async function loginAction(formData: FormData) {
@@ -28,25 +36,24 @@ export async function loginAction(formData: FormData) {
   redirect(ROLE_HOME[profile.role]);
 }
 
+/** Public signup — Student only */
 export async function signupAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const full_name = String(formData.get("full_name") ?? "").trim();
-  const role = String(formData.get("role") ?? "student") as UserRole;
   const hostel_block = String(formData.get("hostel_block") ?? "").trim();
   if (!email || !password || !full_name) {
     return { error: "All fields are required" };
   }
-  const allowed: UserRole[] = ["student", "warden", "worker"];
-  if (!allowed.includes(role)) {
-    return { error: "Invalid role" };
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters" };
   }
   try {
     const profile = await createProfile({
       email,
       password,
       full_name,
-      role,
+      role: "student",
       hostel_block: hostel_block || undefined,
     });
     await setSession(profile.id);
@@ -56,28 +63,82 @@ export async function signupAction(formData: FormData) {
   }
 }
 
+/** Admin invites Warden or Worker accounts */
+export async function createStaffAction(formData: FormData): Promise<void> {
+  await requireUser(["admin"]);
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const full_name = String(formData.get("full_name") ?? "").trim();
+  const role = String(formData.get("role") ?? "") as UserRole;
+  const hostel_block = String(formData.get("hostel_block") ?? "").trim();
+  if (!email || !password || !full_name) return;
+  if (role !== "warden" && role !== "worker") return;
+  try {
+    await createProfile({
+      email,
+      password,
+      full_name,
+      role,
+      hostel_block: hostel_block || undefined,
+    });
+  } catch {
+    return;
+  }
+  revalidatePath("/admin");
+}
+
 export async function logoutAction() {
   await clearSession();
   redirect("/login");
 }
 
+async function processImageUpload(
+  formData: FormData,
+  field: string,
+): Promise<{ path?: string; mime?: string; error?: string }> {
+  const file = formData.get(field);
+  if (!file || !(file instanceof File) || file.size === 0) {
+    return {};
+  }
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type as (typeof ALLOWED_IMAGE_TYPES)[number])) {
+    return { error: "Only JPEG, PNG, or WebP images are allowed" };
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return { error: "Image must be 5 MB or smaller" };
+  }
+  const buf = Buffer.from(await file.arrayBuffer());
+  const saved = await saveUpload({ name: file.name, type: file.type, data: buf });
+  return { path: saved.path, mime: saved.mime };
+}
+
 export async function createComplaintAction(formData: FormData) {
   const user = await requireUser(["student"]);
-  const category = String(formData.get("category")) as ComplaintCategory;
+  const category = String(formData.get("category") ?? "") as ComplaintCategory;
   const hostel_location = String(formData.get("hostel_location") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
-  const urgency = String(formData.get("urgency")) as Urgency;
-  const evidence_path = String(formData.get("evidence_path") ?? "").trim() || undefined;
+  const urgency = String(formData.get("urgency") ?? "") as Urgency;
+
   if (!hostel_location || !description) {
     return { error: "Location and description are required" };
   }
+  if (!CATEGORIES.some((c) => c.value === category)) {
+    return { error: "Please select a category" };
+  }
+  if (!URGENCIES.some((u) => u.value === urgency)) {
+    return { error: "Please select an urgency" };
+  }
+
+  const upload = await processImageUpload(formData, "evidence_file");
+  if (upload.error) return { error: upload.error };
+
   const complaint = await createComplaint({
     student_id: user.id,
     category,
     hostel_location,
     description,
     urgency,
-    evidence_path,
+    evidence_path: upload.path,
+    evidence_mime: upload.mime,
   });
   revalidatePath("/student");
   redirect(`/student/tickets/${complaint.id}`);
@@ -85,25 +146,40 @@ export async function createComplaintAction(formData: FormData) {
 
 export async function reviewAction(complaintId: string) {
   const user = await requireUser(["warden", "admin"]);
-  await reviewComplaint(complaintId, user.id);
+  try {
+    await reviewComplaint(complaintId, user.id);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Review failed" };
+  }
   revalidatePath("/warden");
   revalidatePath(`/warden/tickets/${complaintId}`);
 }
 
-export async function assignAction(formData: FormData) {
+export async function assignAction(formData: FormData): Promise<void> {
   const user = await requireUser(["warden", "admin"]);
   const complaintId = String(formData.get("complaint_id"));
   const workerId = String(formData.get("worker_id"));
-  const urgency = String(formData.get("urgency") || "") as Urgency | "";
-  await assignComplaint(complaintId, user.id, workerId, urgency || undefined);
+  const urgencyRaw = String(formData.get("urgency") || "");
+  const urgency = (urgencyRaw || undefined) as Urgency | undefined;
+  try {
+    await assignComplaint(complaintId, user.id, user.role, workerId, urgency);
+  } catch (e) {
+    throw new Error(e instanceof Error ? e.message : "Assignment failed");
+  }
   revalidatePath("/warden");
   revalidatePath("/worker");
+  revalidatePath("/admin");
   revalidatePath(`/warden/tickets/${complaintId}`);
+  revalidatePath(`/admin/tickets/${complaintId}`);
 }
 
 export async function acceptAction(complaintId: string) {
   const user = await requireUser(["worker"]);
-  await acceptTask(complaintId, user.id);
+  try {
+    await acceptTask(complaintId, user.id);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Accept failed" };
+  }
   revalidatePath("/worker");
   revalidatePath(`/worker/tickets/${complaintId}`);
 }
@@ -111,11 +187,11 @@ export async function acceptAction(complaintId: string) {
 export async function resolveAction(formData: FormData): Promise<void> {
   const user = await requireUser(["worker"]);
   const complaintId = String(formData.get("complaint_id"));
-  const notes = String(formData.get("notes") ?? "").trim();
-  const completion_path =
-    String(formData.get("completion_path") ?? "").trim() || undefined;
+  const notes = sanitizeText(String(formData.get("notes") ?? ""));
   if (!notes) return;
-  await resolveComplaint(complaintId, user.id, notes, completion_path);
+  const upload = await processImageUpload(formData, "completion_file");
+  if (upload.error) return;
+  await resolveComplaint(complaintId, user.id, notes, upload.path, upload.mime);
   revalidatePath("/worker");
   revalidatePath("/student");
   revalidatePath(`/worker/tickets/${complaintId}`);
@@ -125,8 +201,11 @@ export async function verifyAction(formData: FormData): Promise<void> {
   const user = await requireUser(["student"]);
   const complaintId = String(formData.get("complaint_id"));
   const decision = String(formData.get("decision"));
-  const comment = String(formData.get("comment") ?? "").trim() || undefined;
-  await verifyComplaint(complaintId, user.id, decision === "accept", comment);
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (decision !== "accept" && !comment) {
+    return; // rejection requires reason — UI enforces; server also throws
+  }
+  await verifyComplaint(complaintId, user.id, decision === "accept", comment || undefined);
   revalidatePath("/student");
   revalidatePath("/admin");
   revalidatePath(`/student/tickets/${complaintId}`);

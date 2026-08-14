@@ -12,6 +12,7 @@ export async function getSessionUser(): Promise<Profile | null> {
   if (!id) return null;
   const profile = await findProfileById(id);
   if (!profile) return null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password: _pw, ...safe } = profile;
   return safe as Profile;
 }

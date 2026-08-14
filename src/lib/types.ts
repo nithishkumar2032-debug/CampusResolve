@@ -56,6 +56,7 @@ export interface ComplaintEvent {
   id: string;
   complaint_id: string;
   actor_id: string;
+  actor_role?: UserRole | "system";
   from_status: ComplaintStatus | null;
   to_status: ComplaintStatus | null;
   note: string;
@@ -68,13 +69,27 @@ export interface Attachment {
   uploaded_by: string;
   kind: "evidence" | "completion";
   storage_path: string;
+  mime_type?: string;
   created_at: string;
 }
 
+export interface EscalationRecord {
+  id: string;
+  complaint_id: string;
+  reason: string;
+  recipient_role: UserRole;
+  timestamp: string;
+  status_at_escalation: ComplaintStatus;
+  deadline_exceeded: string | null;
+  reviewed: boolean;
+}
+
 export interface AppStore {
+  seed_version: number;
   profiles: Profile[];
   complaints: Complaint[];
   events: ComplaintEvent[];
   attachments: Attachment[];
+  escalations: EscalationRecord[];
   ticket_counter: number;
 }

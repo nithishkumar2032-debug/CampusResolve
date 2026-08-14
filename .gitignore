@@ -44,3 +44,5 @@ next-env.d.ts
 # local demo data + portable tooling
 .data/
 .tools/
+
+.vercel

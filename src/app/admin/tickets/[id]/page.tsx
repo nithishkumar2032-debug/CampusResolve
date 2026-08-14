@@ -1,12 +1,10 @@
 import { notFound } from "next/navigation";
+import { AssignWorkerForm } from "@/components/assign-worker-form";
 import { AppShell } from "@/components/app-shell";
-import { StatusBadge, UrgencyBadge } from "@/components/status-badge";
+import { EscalatedBadge, StatusBadge, UrgencyBadge } from "@/components/status-badge";
 import { TicketTimeline } from "@/components/ticket-timeline";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { assignAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
-import { URGENCIES } from "@/lib/constants";
 import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/demo-store";
 
 export default async function AdminTicketPage({
@@ -39,6 +37,7 @@ export default async function AdminTicketPage({
               <div className="flex gap-2">
                 <StatusBadge status={complaint.status} />
                 <UrgencyBadge urgency={complaint.urgency} />
+                {complaint.is_escalated ? <EscalatedBadge /> : null}
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -60,35 +59,11 @@ export default async function AdminTicketPage({
                 <CardTitle className="text-base">Reassign worker</CardTitle>
               </CardHeader>
               <CardContent>
-                <form action={assignAction} className="space-y-3">
-                  <input type="hidden" name="complaint_id" value={complaint.id} />
-                  <select
-                    name="worker_id"
-                    required
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                    defaultValue={complaint.assigned_worker_id ?? workers[0]?.id}
-                  >
-                    {workers.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.full_name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    name="urgency"
-                    defaultValue={complaint.urgency}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                  >
-                    {URGENCIES.map((u) => (
-                      <option key={u.value} value={u.value}>
-                        {u.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Button type="submit" className="bg-teal-700 hover:bg-teal-600">
-                    Reassign & refresh deadlines
-                  </Button>
-                </form>
+                <AssignWorkerForm
+                  complaintId={complaint.id}
+                  workers={workers}
+                  defaultUrgency={complaint.urgency}
+                />
               </CardContent>
             </Card>
           ) : null}
