@@ -134,8 +134,17 @@ export default function LoginForm() {
                   try {
                     const res = await loginAction(fd);
                     if (res?.error) setError(res.error);
-                  } catch {
-                    /* redirect throws */
+                  } catch (err) {
+                    // redirect() throws; only surface unexpected failures
+                    const digest =
+                      err && typeof err === "object" && "digest" in err
+                        ? String((err as { digest?: unknown }).digest ?? "")
+                        : "";
+                    if (!digest.startsWith("NEXT_REDIRECT")) {
+                      const message =
+                        err instanceof Error ? err.message : "Sign-in failed";
+                      setError(message);
+                    }
                   } finally {
                     window.clearTimeout(timeout);
                   }

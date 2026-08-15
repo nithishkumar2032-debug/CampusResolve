@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 const publicPaths = [
   "/login",
@@ -19,6 +20,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/ai") ||
+    pathname.startsWith("/api/health") ||
     pathname.includes(".")
   ) {
     return NextResponse.next();
@@ -28,12 +30,9 @@ export async function middleware(request: NextRequest) {
     request: { headers: request.headers },
   });
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const publicEnv = getSupabasePublicEnv();
 
-  if (!url || !key) {
+  if (!publicEnv) {
     // Misconfigured production — allow static/public only
     if (!isPublicPath(pathname) && pathname !== "/") {
       const login = request.nextUrl.clone();
@@ -43,6 +42,7 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  const { url, key } = publicEnv;
   const supabase = createServerClient(url, key, {
     cookies: {
       getAll() {
