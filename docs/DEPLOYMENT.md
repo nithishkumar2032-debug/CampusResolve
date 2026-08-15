@@ -17,16 +17,28 @@
 
 See `.env.example`. Required:
 
-- `NEXT_PUBLIC_APP_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_APP_URL` — e.g. `http://localhost:3000` (no trailing slash)
+- `NEXT_PUBLIC_SUPABASE_URL` — Project URL only, e.g. `https://YOUR_PROJECT.supabase.co`  
+  **Do not** append `/rest/v1`, `/auth/v1`, or use the database connection string.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — anon / publishable key (alias: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`)
+- `SUPABASE_SERVICE_ROLE_KEY` — service role (server only)
 
 Optional: `OPENAI_API_KEY`
 
-### Vercel
+### Vercel checklist (fixes opaque `fetch failed` on login)
 
-Project Settings → Environment Variables — set the same keys for Production and Preview.
+Production login runs as a **server action**. If Vercel cannot reach Supabase Auth, the UI shows a network error (historically `fetch failed`).
+
+1. Vercel → Project → **Settings → Environment Variables**
+2. For **Production** (and Preview if you use it), set exactly:
+   - `NEXT_PUBLIC_APP_URL` = `https://campus-resolve-six.vercel.app` (your live origin, no trailing slash)
+   - `NEXT_PUBLIC_SUPABASE_URL` = same Project URL as local `.env.local` (`https://….supabase.co`, **no path**)
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = same anon key as local
+   - `SUPABASE_SERVICE_ROLE_KEY` = same service role as local (server-only)
+3. Confirm each variable applies to **Production**, not only Development/Preview.
+4. **Redeploy** Production after saving (Deployments → … → Redeploy). `NEXT_PUBLIC_*` values are baked in at build time for the client and must be present for the server action at runtime.
+5. Open `https://YOUR_DOMAIN/api/health/supabase` — expect `"ok": true`, `"urlValid": true`, `"reachable": true`, and `urlHost` matching your Supabase project host.
+6. Supabase → Authentication → URL configuration: Site URL = production app URL; Redirect URLs include `/login` and `/reset-password` for prod and localhost.
 
 ### GitHub Actions secrets
 

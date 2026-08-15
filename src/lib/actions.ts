@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { getSessionUser, requireUser, safeInternalPath } from "./auth";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -24,6 +25,7 @@ import {
 import { sanitizeText } from "./complaints/transitions";
 import { createClient } from "./supabase/server";
 import { createAdminClient } from "./supabase/admin";
+import { formatSupabaseAuthError, getSupabasePublicEnv } from "./supabase/env";
 import type { ComplaintCategory, Urgency, UserRole } from "./types";
 
 export async function loginAction(formData: FormData) {
@@ -35,16 +37,29 @@ export async function loginAction(formData: FormData) {
     return { error: "Email and password are required" };
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    return { error: error.message || "Invalid email or password" };
+  if (!getSupabasePublicEnv()) {
+    return {
+      error:
+        "Misconfigured Supabase: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY on Vercel (Production), then redeploy.",
+    };
   }
 
-  const role = (await getSessionUser())?.role;
-  const dest = next || (role ? ROLE_HOME[role] : "/");
-  redirect(dest || "/");
-  void data;
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { error: formatSupabaseAuthError(error) };
+    }
+
+    const role = (await getSessionUser())?.role;
+    const dest = next || (role ? ROLE_HOME[role] : "/");
+    redirect(dest || "/");
+    void data;
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    const message = err instanceof Error ? err.message : "Sign-in failed";
+    return { error: formatSupabaseAuthError({ message }) };
+  }
 }
 
 export async function signupAction(formData: FormData) {
@@ -58,6 +73,13 @@ export async function signupAction(formData: FormData) {
   }
   if (password.length < 6) {
     return { error: "Password must be at least 6 characters" };
+  }
+
+  if (!getSupabasePublicEnv()) {
+    return {
+      error:
+        "Misconfigured Supabase: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY on Vercel (Production), then redeploy.",
+    };
   }
 
   const supabase = await createClient();
@@ -74,7 +96,7 @@ export async function signupAction(formData: FormData) {
       emailRedirectTo: origin ? `${origin}/login` : undefined,
     },
   });
-  if (error) return { error: error.message };
+  if (error) return { error: formatSupabaseAuthError(error) };
 
   // If email confirmation is disabled, session exists and we can redirect
   const user = await getSessionUser();
