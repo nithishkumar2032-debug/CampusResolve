@@ -1,84 +1,63 @@
 # CampusResolve
 
-College hostel complaint, maintenance request, and escalation management MVP.
+College hostel complaint, maintenance request, and escalation management — production web app with PWA install support.
 
 **Live app:** https://campusresolve-drab.vercel.app  
 **GitHub:** https://github.com/nithishkumar2032-debug/CampusResolve
 
 ## Stack
 
-- Next.js (App Router) + TypeScript + Tailwind
-- ShadCN/UI
-- Demo persistence (local `.data/store.json`) with Supabase schema ready
-- LangChain Help Assistant + category/urgency suggest (FAQ fallback if no API key)
-- Vercel-ready
+- Next.js 16 App Router + React 19 + TypeScript + Tailwind v4 + ShadCN/UI
+- Supabase Auth (SSR cookies via `@supabase/ssr`) + Postgres + private Storage
+- LangChain Help Assistant with FAQ fallback (no API key required)
+- Vercel hosting + Progressive Web App (installable)
 
 ## Quick start
+
+1. Create a Supabase project
+2. Run SQL migrations in order:
+   - `supabase/migrations/001_initial.sql`
+   - `supabase/migrations/002_production_runtime.sql`
+3. Copy `.env.example` → `.env.local` and fill values (never commit secrets)
+4. Install and run:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open http://localhost:3000
 
-### Demo accounts (password: `demo1234`)
+## Roles
 
-| Role | Email |
-|------|--------|
-| Student | student@demo.edu |
-| Warden | warden@demo.edu |
-| Worker | worker@demo.edu |
-| Admin | admin@demo.edu |
+| Role | How created |
+|------|-------------|
+| Student | Public `/signup` (always student) |
+| Warden / Worker | Admin invite on `/admin` |
+| Admin | Bootstrap via Supabase SQL / dashboard (see `docs/DEPLOYMENT.md`) |
 
 ## Workflow
 
-1. Student submits a request → unique ticket `CR-YYYY-####`
-2. Warden reviews → assigns worker → deadlines from urgency
-3. Worker accepts → in progress → resolves with notes/evidence
-4. Student accepts (closed) or rejects (reopen + escalate)
-5. Admin sees escalated / emergency cases and can reassign
+Submitted → Under Review → Assigned → In Progress → Resolved → Closed
 
-Statuses: Submitted → Under Review → Assigned → In Progress → Resolved → Closed
+Student verification required before Closed. Rejection reopens and escalates.
 
-## Environment
+## Scripts
 
-Copy `.env.example` to `.env.local`:
-
-```env
-OPENAI_API_KEY=           # optional — enables LangChain answers
-NEXT_PUBLIC_SUPABASE_URL= # optional — when wiring live Supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```bash
+npm run lint
+npm run test          # unit + transition checks
+npm run test:e2e      # Playwright smoke (needs env for auth flows)
+npm run build
 ```
 
-Without `OPENAI_API_KEY`, the Help Assistant uses built-in FAQ answers and heuristic suggestions.
+## Documentation
 
-Without Supabase env vars, the app runs in **demo mode** (file store + cookie sessions).
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Supabase, Storage, Admin bootstrap, Vercel
+- [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) — current status
+- [`docs/WORK_DONE.md`](docs/WORK_DONE.md) — work log
+- [`docs/PRODUCTION_HANDOFF.md`](docs/PRODUCTION_HANDOFF.md) — production handoff
 
-### Supabase (production data)
+## PWA
 
-1. Create a Supabase project
-2. Run [`supabase/migrations/001_initial.sql`](supabase/migrations/001_initial.sql) in the SQL editor
-3. Set the env vars above
-4. Create Storage bucket policies as needed for `evidence`
-
-## Deploy (Vercel)
-
-1. Push this repo to GitHub
-2. Import the project in Vercel
-3. Add env vars
-4. Deploy
-
-## Project layout
-
-- `src/app/` — role dashboards and ticket pages
-- `src/lib/demo-store.ts` — demo data + workflow transitions
-- `src/lib/ai/help.ts` — LangChain help + suggest
-- `src/components/help-assistant.tsx` — floating chat
-- `supabase/migrations/` — Postgres schema + RLS
-
-## Scope notes
-
-- Email/WhatsApp notifications are out of MVP (dashboard escalation flags only)
-- AI never blocks ticket submit
-- Native mobile app is future work
+Supported browsers can install CampusResolve (standalone window). Service worker caches only safe static assets and the offline shell — never auth tokens or private complaint APIs.

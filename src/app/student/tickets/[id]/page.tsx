@@ -7,11 +7,12 @@ import { TicketTimeline } from "@/components/ticket-timeline";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { EvidenceImage } from "@/components/evidence-image";
 import { commentAction, verifyAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
 import { isOverdue } from "@/lib/complaints/deadlines";
 import { CATEGORIES } from "@/lib/constants";
-import { getAttachments, getComplaint, getEvents, getStore } from "@/lib/demo-store";
+import { getAttachments, getComplaint, getEvents, getStore } from "@/lib/data";
 
 export default async function StudentTicketPage({
   params,
@@ -107,9 +108,8 @@ export default async function StudentTicketPage({
                       <p className="mb-1 text-xs font-medium capitalize text-on-surface-variant">
                         {a.kind}
                       </p>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={a.storage_path}
+                      <EvidenceImage
+                        storagePath={a.storage_path}
                         alt={`${a.kind} evidence`}
                         className="max-h-40 w-full rounded object-contain"
                       />

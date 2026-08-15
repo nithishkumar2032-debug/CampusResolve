@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { clearSession, getSessionUser, requireUser, setSession } from "./auth";
+import { getSessionUser, requireUser, safeInternalPath } from "./auth";
 import {
   ALLOWED_IMAGE_TYPES,
   CATEGORIES,
@@ -15,86 +15,179 @@ import {
   addComment,
   assignComplaint,
   createComplaint,
-  createProfile,
-  findProfileByEmail,
+  createSignedEvidenceUrl,
   resolveComplaint,
   reviewComplaint,
-  saveUpload,
+  uploadEvidenceFile,
   verifyComplaint,
-} from "./demo-store";
+} from "./data";
 import { sanitizeText } from "./complaints/transitions";
+import { createClient } from "./supabase/server";
+import { createAdminClient } from "./supabase/admin";
 import type { ComplaintCategory, Urgency, UserRole } from "./types";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const profile = await findProfileByEmail(email);
-  if (!profile || profile.password !== password) {
-    return { error: "Invalid email or password" };
+  const next = safeInternalPath(String(formData.get("next") ?? ""), "");
+
+  if (!email || !password) {
+    return { error: "Email and password are required" };
   }
-  await setSession(profile.id);
-  redirect(ROLE_HOME[profile.role]);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    return { error: error.message || "Invalid email or password" };
+  }
+
+  const role = (await getSessionUser())?.role;
+  const dest = next || (role ? ROLE_HOME[role] : "/");
+  redirect(dest || "/");
+  void data;
 }
 
-/** Public signup — Student only */
 export async function signupAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const full_name = String(formData.get("full_name") ?? "").trim();
   const hostel_block = String(formData.get("hostel_block") ?? "").trim();
+
   if (!email || !password || !full_name) {
     return { error: "All fields are required" };
   }
   if (password.length < 6) {
     return { error: "Password must be at least 6 characters" };
   }
-  try {
-    const profile = await createProfile({
-      email,
-      password,
-      full_name,
-      role: "student",
-      hostel_block: hostel_block || undefined,
-    });
-    await setSession(profile.id);
-    redirect(ROLE_HOME[profile.role]);
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Signup failed" };
+
+  const supabase = await createClient();
+  const origin = process.env.NEXT_PUBLIC_APP_URL || undefined;
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name,
+        hostel_block: hostel_block || null,
+        // role intentionally omitted — DB trigger forces student
+      },
+      emailRedirectTo: origin ? `${origin}/login` : undefined,
+    },
+  });
+  if (error) return { error: error.message };
+
+  // If email confirmation is disabled, session exists and we can redirect
+  const user = await getSessionUser();
+  if (user) {
+    redirect(ROLE_HOME.student);
   }
+  return {
+    success: true,
+    message: "Account created. Check your email to verify, then sign in.",
+  };
 }
 
-/** Admin invites Warden or Worker accounts */
-export async function createStaffAction(formData: FormData): Promise<void> {
-  await requireUser(["admin"]);
+export async function forgotPasswordAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { error: "Email is required" };
+  const supabase = await createClient();
+  const origin = process.env.NEXT_PUBLIC_APP_URL;
+  if (!origin) return { error: "App URL is not configured" };
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/reset-password`,
+  });
+  if (error) return { error: error.message };
+  return { success: true, message: "If that email exists, a reset link was sent." };
+}
+
+export async function resetPasswordAction(formData: FormData) {
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 6) return { error: "Password must be at least 6 characters" };
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
+  redirect("/login");
+}
+
+/** Admin invites Warden or Worker via Auth Admin API */
+export async function createStaffAction(formData: FormData) {
+  const admin = await requireUser(["admin"]);
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const full_name = String(formData.get("full_name") ?? "").trim();
   const role = String(formData.get("role") ?? "") as UserRole;
   const hostel_block = String(formData.get("hostel_block") ?? "").trim();
-  if (!email || !password || !full_name) return;
-  if (role !== "warden" && role !== "worker") return;
+
+  if (!email || !password || !full_name) {
+    return { error: "All fields are required" };
+  }
+  if (role !== "warden" && role !== "worker") {
+    return { error: "Only Warden or Worker accounts can be invited" };
+  }
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters" };
+  }
+
   try {
-    await createProfile({
+    const service = createAdminClient();
+    const { data: created, error: createErr } = await service.auth.admin.createUser({
       email,
       password,
-      full_name,
-      role,
-      hostel_block: hostel_block || undefined,
+      email_confirm: true,
+      user_metadata: { full_name, hostel_block: hostel_block || null },
     });
-  } catch {
-    return;
+    if (createErr) {
+      if (/already/i.test(createErr.message)) {
+        return { error: "An account with this email already exists" };
+      }
+      return { error: createErr.message };
+    }
+    const userId = created.user?.id;
+    if (!userId) return { error: "Could not create user" };
+
+    // Trigger creates student profile — elevate role via service role
+    const { error: profileErr } = await service
+      .from("profiles")
+      .update({
+        role,
+        full_name,
+        hostel_block: hostel_block || null,
+        active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+    if (profileErr) return { error: profileErr.message };
+
+    await service.from("audit_log").insert({
+      actor_id: admin.id,
+      action: "staff_invite",
+      target_email: email,
+      meta: { role, full_name, hostel_block: hostel_block || null },
+    });
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      message: `${role === "warden" ? "Warden" : "Worker"} account created for ${email}`,
+      user: { email, full_name, role },
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not create account" };
   }
-  revalidatePath("/admin");
 }
 
 export async function logoutAction() {
-  await clearSession();
+  const supabase = await createClient();
+  await supabase.auth.signOut();
   redirect("/login");
 }
 
 async function processImageUpload(
   formData: FormData,
   field: string,
+  complaintId: string,
+  userId: string,
+  kind: "evidence" | "completion",
 ): Promise<{ path?: string; mime?: string; error?: string }> {
   const file = formData.get(field);
   if (!file || !(file instanceof File) || file.size === 0) {
@@ -106,9 +199,12 @@ async function processImageUpload(
   if (file.size > MAX_UPLOAD_BYTES) {
     return { error: "Image must be 5 MB or smaller" };
   }
-  const buf = Buffer.from(await file.arrayBuffer());
-  const saved = await saveUpload({ name: file.name, type: file.type, data: buf });
-  return { path: saved.path, mime: saved.mime };
+  try {
+    const saved = await uploadEvidenceFile({ complaintId, userId, file, kind });
+    return { path: saved.path, mime: saved.mime };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Upload failed" };
+  }
 }
 
 export async function createComplaintAction(formData: FormData) {
@@ -128,26 +224,49 @@ export async function createComplaintAction(formData: FormData) {
     return { error: "Please select an urgency" };
   }
 
-  const upload = await processImageUpload(formData, "evidence_file");
-  if (upload.error) return { error: upload.error };
+  // Create complaint first so storage path can include complaint id
+  let complaint;
+  try {
+    complaint = await createComplaint({
+      student_id: user.id,
+      category,
+      hostel_location,
+      description,
+      urgency,
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not create complaint" };
+  }
 
-  const complaint = await createComplaint({
-    student_id: user.id,
-    category,
-    hostel_location,
-    description,
-    urgency,
-    evidence_path: upload.path,
-    evidence_mime: upload.mime,
-  });
+  const upload = await processImageUpload(
+    formData,
+    "evidence_file",
+    complaint.id,
+    user.id,
+    "evidence",
+  );
+  if (upload.error) {
+    return { error: upload.error };
+  }
+  if (upload.path) {
+    const supabase = await createClient();
+    await supabase.from("attachments").insert({
+      complaint_id: complaint.id,
+      uploaded_by: user.id,
+      kind: "evidence",
+      storage_path: upload.path,
+      mime_type: upload.mime ?? null,
+    });
+  }
+
   revalidatePath("/student");
   redirect(`/student/tickets/${complaint.id}`);
 }
 
 export async function reviewAction(complaintId: string) {
-  const user = await requireUser(["warden", "admin"]);
+  await requireUser(["warden", "admin"]);
   try {
-    await reviewComplaint(complaintId, user.id);
+    await reviewComplaint(complaintId, "", undefined);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Review failed" };
   }
@@ -189,7 +308,13 @@ export async function resolveAction(formData: FormData): Promise<void> {
   const complaintId = String(formData.get("complaint_id"));
   const notes = sanitizeText(String(formData.get("notes") ?? ""));
   if (!notes) return;
-  const upload = await processImageUpload(formData, "completion_file");
+  const upload = await processImageUpload(
+    formData,
+    "completion_file",
+    complaintId,
+    user.id,
+    "completion",
+  );
   if (upload.error) return;
   await resolveComplaint(complaintId, user.id, notes, upload.path, upload.mime);
   revalidatePath("/worker");
@@ -202,9 +327,7 @@ export async function verifyAction(formData: FormData): Promise<void> {
   const complaintId = String(formData.get("complaint_id"));
   const decision = String(formData.get("decision"));
   const comment = String(formData.get("comment") ?? "").trim();
-  if (decision !== "accept" && !comment) {
-    return; // rejection requires reason — UI enforces; server also throws
-  }
+  if (decision !== "accept" && !comment) return;
   await verifyComplaint(complaintId, user.id, decision === "accept", comment || undefined);
   revalidatePath("/student");
   revalidatePath("/admin");
@@ -222,4 +345,13 @@ export async function commentAction(formData: FormData): Promise<void> {
   revalidatePath(`/warden/tickets/${complaintId}`);
   revalidatePath(`/worker/tickets/${complaintId}`);
   revalidatePath(`/admin/tickets/${complaintId}`);
+}
+
+export async function getEvidenceUrlAction(storagePath: string) {
+  await requireUser();
+  try {
+    return { url: await createSignedEvidenceUrl(storagePath) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not load evidence" };
+  }
 }

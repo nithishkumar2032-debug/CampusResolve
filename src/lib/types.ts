@@ -28,8 +28,9 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   hostel_block: string | null;
-  password?: string;
+  active?: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Complaint {
