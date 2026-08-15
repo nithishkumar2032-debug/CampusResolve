@@ -9,6 +9,8 @@ import { requireUser } from "@/lib/auth";
 import { getStats, listComplaintsForUser } from "@/lib/data";
 import { CATEGORIES } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDashboard() {
   const user = await requireUser(["admin"]);
   const stats = await getStats();

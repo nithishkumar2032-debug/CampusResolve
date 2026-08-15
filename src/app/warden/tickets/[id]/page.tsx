@@ -11,6 +11,8 @@ import { TicketTimeline } from "@/components/ticket-timeline";
 import { AppShell } from "@/components/app-shell";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default async function WardenTicketPage({
   params,
 }: {

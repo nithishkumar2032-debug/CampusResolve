@@ -1,11 +1,17 @@
 import { redirect } from "next/navigation";
 import { ROLE_HOME } from "./constants";
+import { getSupabasePublicEnv } from "./supabase/env";
 import { createClient } from "./supabase/server";
 import type { Profile, UserRole } from "./types";
 
 export { safeInternalPath } from "./safe-path";
 
 export async function getSessionUser(): Promise<Profile | null> {
+  // Avoid hard-crashing page data collection when public env is missing
+  // (e.g. CI / Vercel build before env is configured). Runtime login still
+  // requires real vars via createClient / browser client.
+  if (!getSupabasePublicEnv()) return null;
+
   const supabase = await createClient();
   const {
     data: { user },
