@@ -1,12 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { requireSupabasePublicEnv } from "./env";
 
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error("Supabase env vars are not configured");
-  }
+  const { url, key } = requireSupabasePublicEnv();
   const cookieStore = await cookies();
   return createServerClient(url, key, {
     cookies: {
@@ -19,7 +16,7 @@ export async function createClient() {
             cookieStore.set(name, value, options),
           );
         } catch {
-          /* called from a Server Component */
+          /* Server Component — middleware will refresh session */
         }
       },
     },

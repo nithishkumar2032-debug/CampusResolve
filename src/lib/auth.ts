@@ -1,20 +1,36 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ROLE_HOME } from "./constants";
-import { findProfileById } from "./demo-store";
+import { createClient } from "./supabase/server";
 import type { Profile, UserRole } from "./types";
 
-const SESSION_COOKIE = "cr_session";
+export { safeInternalPath } from "./safe-path";
 
 export async function getSessionUser(): Promise<Profile | null> {
-  const jar = await cookies();
-  const id = jar.get(SESSION_COOKIE)?.value;
-  if (!id) return null;
-  const profile = await findProfileById(id);
-  if (!profile) return null;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { password: _pw, ...safe } = profile;
-  return safe as Profile;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id, email, full_name, role, hostel_block, active, created_at, updated_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error || !profile) return null;
+  if (profile.active === false) return null;
+
+  return {
+    id: profile.id,
+    email: profile.email,
+    full_name: profile.full_name,
+    role: profile.role as UserRole,
+    hostel_block: profile.hostel_block,
+    active: profile.active ?? true,
+    created_at: profile.created_at,
+    updated_at: profile.updated_at ?? profile.created_at,
+  };
 }
 
 export async function requireUser(roles?: UserRole[]): Promise<Profile> {
@@ -24,20 +40,4 @@ export async function requireUser(roles?: UserRole[]): Promise<Profile> {
     redirect(ROLE_HOME[user.role]);
   }
   return user;
-}
-
-export async function setSession(userId: string) {
-  const jar = await cookies();
-  jar.set(SESSION_COOKIE, userId, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24 * 14,
-  });
-}
-
-export async function clearSession() {
-  const jar = await cookies();
-  jar.delete(SESSION_COOKIE);
 }

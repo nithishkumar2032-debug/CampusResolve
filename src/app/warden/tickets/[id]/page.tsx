@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { reviewAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
 import { CATEGORIES } from "@/lib/constants";
-import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/demo-store";
+import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/data";
 import { TicketTimeline } from "@/components/ticket-timeline";
 import { AppShell } from "@/components/app-shell";
 import { notFound } from "next/navigation";

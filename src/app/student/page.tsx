@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { ComplaintFilters } from "@/components/complaint-filters";
 import { KpiCard } from "@/components/kpi-card";
 import { requireUser } from "@/lib/auth";
-import { listComplaintsForUser } from "@/lib/demo-store";
+import { listComplaintsForUser } from "@/lib/data";
 
 export default async function StudentDashboard() {
   const user = await requireUser(["student"]);

@@ -4,7 +4,7 @@ import { ComplaintFilters } from "@/components/complaint-filters";
 import { KpiCard } from "@/components/kpi-card";
 import { requireUser } from "@/lib/auth";
 import { isOverdue } from "@/lib/complaints/deadlines";
-import { getStore, listAllComplaints } from "@/lib/demo-store";
+import { getStore, listAllComplaints } from "@/lib/data";
 
 export default async function WardenDashboard() {
   const user = await requireUser(["warden", "admin"]);

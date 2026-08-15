@@ -1,8 +1,6 @@
 import type { ComplaintCategory, ComplaintStatus, Urgency, UserRole } from "./types";
 
 export const APP_NAME = "CampusResolve";
-export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
-export const SEED_VERSION = 3;
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 

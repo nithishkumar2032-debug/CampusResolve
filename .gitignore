@@ -46,3 +46,7 @@ next-env.d.ts
 .tools/
 
 .vercel
+
+# Office lock files
+~$*
+

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { acceptAction, resolveAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
-import { getComplaint, getEvents, getStore } from "@/lib/demo-store";
+import { getComplaint, getEvents, getStore } from "@/lib/data";
 
 export default async function WorkerTicketPage({
   params,

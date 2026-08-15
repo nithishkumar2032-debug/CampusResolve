@@ -4,12 +4,9 @@ import { AppShell } from "@/components/app-shell";
 import { EscalationBanner } from "@/components/escalation-banner";
 import { EscalatedBadge, StatusBadge, UrgencyBadge } from "@/components/status-badge";
 import { KpiCard } from "@/components/kpi-card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { createStaffAction } from "@/lib/actions";
+import { InviteStaffForm } from "@/components/invite-staff-form";
 import { requireUser } from "@/lib/auth";
-import { getStats, listComplaintsForUser } from "@/lib/demo-store";
+import { getStats, listComplaintsForUser } from "@/lib/data";
 import { CATEGORIES } from "@/lib/constants";
 
 export default async function AdminDashboard() {
@@ -47,39 +44,7 @@ export default async function AdminDashboard() {
         </div>
         <div className="cr-card p-4">
           <h2 className="mb-3 text-sm font-semibold text-navy">Invite staff account</h2>
-          <form action={createStaffAction} className="space-y-3">
-            <div>
-              <Label htmlFor="full_name">Full name</Label>
-              <Input id="full_name" name="full_name" required className="rounded-lg" />
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required className="rounded-lg" />
-            </div>
-            <div>
-              <Label htmlFor="password">Temporary password</Label>
-              <Input id="password" name="password" type="password" required minLength={6} className="rounded-lg" />
-            </div>
-            <div>
-              <Label htmlFor="role">Role</Label>
-              <select
-                id="role"
-                name="role"
-                className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
-                defaultValue="worker"
-              >
-                <option value="warden">Warden</option>
-                <option value="worker">Worker</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="hostel_block">Hostel block (optional)</Label>
-              <Input id="hostel_block" name="hostel_block" className="rounded-lg" />
-            </div>
-            <Button type="submit" className="rounded-lg bg-navy hover:bg-navy-deep">
-              Create account
-            </Button>
-          </form>
+          <InviteStaffForm />
         </div>
       </div>
 

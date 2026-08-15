@@ -5,7 +5,7 @@ import { EscalatedBadge, StatusBadge, UrgencyBadge } from "@/components/status-b
 import { TicketTimeline } from "@/components/ticket-timeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
-import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/demo-store";
+import { getComplaint, getEvents, getStore, listWorkers } from "@/lib/data";
 
 export default async function AdminTicketPage({
   params,

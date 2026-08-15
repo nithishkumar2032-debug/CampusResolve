@@ -5,7 +5,7 @@ import { StatusBadge, UrgencyBadge } from "@/components/status-badge";
 import { KpiCard } from "@/components/kpi-card";
 import { requireUser } from "@/lib/auth";
 import { isOverdue } from "@/lib/complaints/deadlines";
-import { listComplaintsForUser } from "@/lib/demo-store";
+import { listComplaintsForUser } from "@/lib/data";
 
 export default async function WorkerDashboard() {
   const user = await requireUser(["worker"]);
