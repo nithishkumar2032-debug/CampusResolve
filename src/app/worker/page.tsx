@@ -7,6 +7,8 @@ import { requireUser } from "@/lib/auth";
 import { isOverdue } from "@/lib/complaints/deadlines";
 import { listComplaintsForUser } from "@/lib/data";
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkerDashboard() {
   const user = await requireUser(["worker"]);
   const tickets = await listComplaintsForUser(user);

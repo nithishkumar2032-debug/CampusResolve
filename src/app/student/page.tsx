@@ -5,6 +5,8 @@ import { KpiCard } from "@/components/kpi-card";
 import { requireUser } from "@/lib/auth";
 import { listComplaintsForUser } from "@/lib/data";
 
+export const dynamic = "force-dynamic";
+
 export default async function StudentDashboard() {
   const user = await requireUser(["student"]);
   const tickets = await listComplaintsForUser(user);

@@ -10,6 +10,8 @@ import { acceptAction, resolveAction } from "@/lib/actions";
 import { requireUser } from "@/lib/auth";
 import { getComplaint, getEvents, getStore } from "@/lib/data";
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkerTicketPage({
   params,
 }: {

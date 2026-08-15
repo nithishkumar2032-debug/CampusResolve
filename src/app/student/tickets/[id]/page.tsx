@@ -14,6 +14,8 @@ import { isOverdue } from "@/lib/complaints/deadlines";
 import { CATEGORIES } from "@/lib/constants";
 import { getAttachments, getComplaint, getEvents, getStore } from "@/lib/data";
 
+export const dynamic = "force-dynamic";
+
 export default async function StudentTicketPage({
   params,
 }: {
